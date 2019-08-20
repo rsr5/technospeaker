@@ -120,10 +120,21 @@ boolean samplingIsDone() {
 }
 
 
+int level_colors[8] = {
+  0xDF470A,
+  0xDF470A,
+  0xDBC42A,
+  0xDBC42A,
+  0xDBC42A,
+  0x2CA215,
+  0x2CA215,
+  0x2CA215
+};
+
 void ledFrame() {
   clearScreen();
 
-  int i, j; 
+  int i, j, y; 
   float total; 
   float level;
   int height;
@@ -132,18 +143,22 @@ void ledFrame() {
   for (i = 0; i < 16; i++) {
     total = 0;
     for (j = 0; j < 8; j++) {
-      total += magnitudes[(i * 8) + j];
+      if (i == 0 && j < 4) {
+        /* Avoid the four first bins. */
+      } else {
+        total += magnitudes[(i * 8) + j];
+      }
     }
     level = (20.0 * log10(total / 8.0)) - 30.0;
     if (level < 0) { level = 0.00; }
-    height = (level / 30.0) * 8.0;
-    if (height > 8) {
-      color = CRGB::Red;
-    } else {
-      color = CRGB::Green;
-    }
+    height = (level / 20.0) * 8.0;
+    color = CRGB::Green;
 
-    drawpixel(i, height, color);
+    height -= 1;
+    if(height > 7) { height = 7; }
+    for (y = 7; y >= 7 - height; y--) {
+      drawpixel(i, y, level_colors[y]);
+    }
   } 
 
   FastLED.show();
