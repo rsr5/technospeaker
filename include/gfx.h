@@ -1,11 +1,15 @@
+#ifndef __GFX_H
+#define __GFX_H
+
+#include "FastLED.h"
+
+#define LED_DATA_PIN 2
 
 #define NUM_LEDS 128 
 #define WIDTH 16
 #define HEIGHT 8
 
-CRGB leds[NUM_LEDS];
-
-int matrix[HEIGHT][WIDTH] = {
+const int matrix[HEIGHT][WIDTH] = {
   {0, 15, 16, 31, 32, 47, 48, 63, 64, 79, 80, 95, 96, 111, 112, 127},
   {1, 14, 17, 30, 33, 46, 49, 62, 65, 78, 81, 94, 97, 110, 113, 126},
   {2, 13, 18, 29, 34, 45, 50, 61, 66, 77, 82, 93, 98, 109, 114, 125},
@@ -19,13 +23,7 @@ int matrix[HEIGHT][WIDTH] = {
 /* Map an X, Y coordinate to the actual pixel ID in the array. */
 #define mapp(X, Y) matrix[Y][X]
 
-void drawpixel(int x, int y, CRGB color) {
-  leds[mapp(x, y)] = color;
-}
+void drawpixel(CRGB *leds, int x, int y, CRGB color);
+void clearScreen(CRGB *leds);
 
-void clearScreen() {
-  int i;
-  for (i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB::Black;
-  }
-}
+#endif
