@@ -1,165 +1,206 @@
-// Audio Spectrum Display
-// Copyright 2013 Tony DiCola (tony@tonydicola.com)
+#include <ArduinoJson.h>
+#include <FastLED.h>
 
-// This code is part of the guide at http://learn.adafruit.com/fft-fun-with-fourier-transforms/
-
-#define ARM_MATH_CM4
-#include <arm_math.h>
-#include "FastLED.h"
-#include "gfx.h"
-
-void spectrumSetup();
-void samplingBegin();
-boolean samplingIsDone();
-void spectrumLoop();
-void parserLoop();
-void parseCommand(char* command);
-void ledFrame();
-
-////////////////////////////////////////////////////////////////////////////////
-// CONIFIGURATION 
-// These values can be changed to alter the behavior of the spectrum display.
-////////////////////////////////////////////////////////////////////////////////
-
-int SAMPLE_RATE_HZ = 9000;             // Sample rate of the audio in hertz.
-float SPECTRUM_MIN_DB = 30.0;          // Audio intensity (in decibels) that maps to low LED brightness.
-float SPECTRUM_MAX_DB = 60.0;          // Audio intensity (in decibels) that maps to high LED brightness.
-                                       // Useful for turning the LED display on and off with commands from the serial port.
-const int FFT_SIZE = 256;              // Size of the FFT.  Realistically can only be at most 256 
-                                       // without running out of memory for buffers and other state.
-const int NUM_BUCKETS = 128;
-const int AUDIO_INPUT_PIN = 16;        // Input ADC pin for audio data.
-const int ANALOG_READ_RESOLUTION = 10; // Bits of resolution for the ADC.
-const int ANALOG_READ_AVERAGING = 16;  // Number of samples to average with each ADC reading.
-const int POWER_LED_PIN = 13;          // Output pin for power LED (pin 13 to use Teensy 3.0's onboard LED).
-                                       // any other changes to the program.
+#define NUM_LEDS 12
+#define DATA_PIN 2
+#define NONE 0
+#define SPINNER 1
+#define BLINKER 2
+#define VOLUME 3
 
 
-////////////////////////////////////////////////////////////////////////////////
-// INTERNAL STATE
-// These shouldn't be modified unless you know what you're doing.
-////////////////////////////////////////////////////////////////////////////////
+CRGB leds[NUM_LEDS];
+CRGB current_colour = CRGB::Red;
 
-IntervalTimer samplingTimer;
-float samples[FFT_SIZE*2];
-float magnitudes[FFT_SIZE];
-int sampleCounter = 0;
+String inputString = "";
+StaticJsonDocument<200> command;
 
-////////////////////////////////////////////////////////////////////////////////
-// MAIN SKETCH FUNCTIONS
-////////////////////////////////////////////////////////////////////////////////
+bool stringComplete = false;
+bool showColour = false;
 
-void setup() {
-  // Set up serial port.
-  Serial.begin(38400);
+int theme = NONE;
+int lastTheme = NONE;
 
-  delay(2000);  
-
-  // Set up ADC and audio input.
-  pinMode(AUDIO_INPUT_PIN, INPUT);
-  analogReadResolution(ANALOG_READ_RESOLUTION);
-  analogReadAveraging(ANALOG_READ_AVERAGING);
-  
-  // Turn on the power indicator LED.
-  pinMode(POWER_LED_PIN, OUTPUT);
-  digitalWrite(POWER_LED_PIN, HIGH);
-  
-  // Begin sampling audio
-  samplingBegin();
-
-  FastLED.addLeds<NEOPIXEL, 2>(leds, NUM_LEDS);
+int map_led(int led) {
+  static int mapping[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1};
+  return mapping[led];
 }
 
-void loop() {
-  // Calculate FFT if a full sample is available.
-  if (samplingIsDone()) {
-    // Run FFT on sample data.
-    arm_cfft_radix4_instance_f32 fft_inst;
-    arm_cfft_radix4_init_f32(&fft_inst, FFT_SIZE, 0, 1);
-    arm_cfft_radix4_f32(&fft_inst, samples);
-    // Calculate magnitude of complex numbers output by the FFT.
-    arm_cmplx_mag_f32(samples, magnitudes, FFT_SIZE);
- 
-    Serial.print("FFT");
-    int i;
-    for (i=0; i<NUM_BUCKETS; i++) {
-      Serial.print(20*log10(magnitudes[i]));
-      Serial.print("::");
+
+class SpinnerEffect {
+  int current_colour;
+  int num_colours;
+  CRGB colours[5];
+  unsigned long previousMillis;
+  int current_led;
+
+  public:
+  SpinnerEffect() {
+    colours[0] = CRGB::Red;
+    colours[1] = CRGB::Orange;
+    colours[2] = CRGB::Yellow;
+    colours[3] = CRGB::Green;
+    colours[4] = CRGB::Blue;
+
+    num_colours = 5;
+    current_colour = 0;
+    previousMillis = 0;
+    current_led = 0;
+  }
+
+  void doFrame() {
+    unsigned long currentMillis = millis();
+
+    if ((currentMillis - previousMillis) >= 100) {
+      leds[map_led(current_led)] = CRGB::Black;
+      current_led++;
+
+      if (current_led >= NUM_LEDS) {
+        current_led = 0;
+        current_colour++;
+        if (current_colour > num_colours) {
+          current_colour = 0;
+        }
+      }
+
+      leds[map_led(current_led)] = colours[current_colour];
+      FastLED.show();
+      previousMillis = currentMillis;
     }
-    Serial.println();
-
-    // Restart audio sampling.
-    samplingBegin();
-
-    ledFrame();
   }
-}
-
-
-void samplingCallback() {
-  // Read from the ADC and store the sample data
-  samples[sampleCounter] = (float32_t)analogRead(AUDIO_INPUT_PIN);
-  // Complex FFT functions require a coefficient for the imaginary part of the input.
-  // Since we only have real data, set this coefficient to zero.
-  samples[sampleCounter+1] = 0.0;
-  // Update sample buffer position and stop after the buffer is filled
-  sampleCounter += 2;
-  if (sampleCounter >= FFT_SIZE*2) {
-    samplingTimer.end();
-  }
-}
-
-void samplingBegin() {
-  // Reset sample buffer position and start callback at necessary rate.
-  sampleCounter = 0;
-  samplingTimer.begin(samplingCallback, 1000000/SAMPLE_RATE_HZ);
-}
-
-boolean samplingIsDone() {
-  return sampleCounter >= FFT_SIZE*2;
-}
-
-
-int level_colors[8] = {
-  0xDF470A,
-  0xDF470A,
-  0xDBC42A,
-  0xDBC42A,
-  0xDBC42A,
-  0x2CA215,
-  0x2CA215,
-  0x2CA215
 };
 
-void ledFrame() {
-  clearScreen();
 
-  int i, j, y; 
-  float total; 
-  float level;
-  int height;
-  CRGB color;
+class BlinkerEffect {
+  unsigned long previousMillis;
+  int brightness;
+  int delta;
 
-  for (i = 0; i < 16; i++) {
-    total = 0;
-    for (j = 0; j < 8; j++) {
-      if (i == 0 && j < 4) {
-        /* Avoid the four first bins. */
-      } else {
-        total += magnitudes[(i * 8) + j];
+  public:
+  BlinkerEffect() {
+    previousMillis = 0;
+    brightness = 0;
+    delta = 25;
+  }
+
+  void doFrame() {
+    unsigned long currentMillis = millis();
+
+    FastLED.setBrightness(brightness);
+    for(int led = 0; led < NUM_LEDS; led++) {
+       leds[map_led(led)] = CRGB::White;
+
+       FastLED.show();
+    }
+    if ((currentMillis - previousMillis) >= 100) {
+      brightness += delta;
+      if (brightness > 255 || brightness < 0) {
+        delta *= -1;
+        brightness += delta;
       }
     }
-    level = (20.0 * log10(total / 8.0)) - 30.0;
-    if (level < 0) { level = 0.00; }
-    height = (level / 20.0) * 8.0;
-    color = CRGB::Green;
+  }
+};
 
-    height -= 1;
-    if(height > 7) { height = 7; }
-    for (y = 7; y >= 7 - height; y--) {
-      drawpixel(i, y, level_colors[y]);
+
+class VolumeEffect {
+  unsigned long previousMillis;
+  int volume;
+
+  public:
+  VolumeEffect() {
+    volume = 0;
+    previousMillis = 0;
+  }
+
+  void setVolume(int newVolume) {
+    volume = newVolume;
+    previousMillis = millis();
+  }
+
+  void doFrame() {
+    unsigned long currentMillis = millis();
+    int num_leds = (int)((float)volume / 100.0 * NUM_LEDS);
+    static int mapping[12] = {8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7};
+
+    for(int led = 0; led < num_leds; led++) {
+      leds[mapping[led]] = CRGB::Blue;
     }
-  } 
+    for(int led = num_leds; led < NUM_LEDS; led++) {
+      leds[mapping[led]] = CRGB::Red;
+    }
+    FastLED.show();
 
-  FastLED.show();
+    if ((currentMillis - previousMillis) >= 2000) {
+      theme = lastTheme;
+    }
+  }
+};
+
+
+void stopLeds() {
+ for(int led = 0; led < NUM_LEDS; led++) {
+    leds[map_led(led)] = CRGB::Black;
+    FastLED.show();
+  }
+}
+
+void setup() {
+  delay(1000);
+
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+  FastLED.setBrightness(126);
+
+  Serial.begin(9600);
+  inputString.reserve(200);
+
+  stopLeds();
+}
+
+SpinnerEffect spinnerEffect;
+BlinkerEffect blinkerEffect;
+VolumeEffect volumeEffect;
+
+void loop() {
+  if (theme == SPINNER) {
+    spinnerEffect.doFrame();
+  } else if (theme == BLINKER) {
+    blinkerEffect.doFrame();
+  } else if (theme == VOLUME) {
+    volumeEffect.doFrame();
+  } else {
+    stopLeds();
+  }
+
+  if (Serial.available() > 0) {
+    while (Serial.available()) {
+      char c = (char)Serial.read();
+      inputString += c;
+      if (c == '\n') {
+        stringComplete = true;
+      }
+    }
+  }
+
+  if (stringComplete) {
+    DeserializationError error = deserializeJson(command, inputString);
+
+    if (command["theme"] == "spinner") {
+      lastTheme = theme;
+      theme = SPINNER;
+    } else if (command["theme"] == "blinker") {
+      lastTheme = theme;
+      theme = BLINKER;
+    } else if (command["theme"] == "volume") {
+      if (theme != VOLUME) {
+        lastTheme = theme;
+      }
+      theme = VOLUME;
+      volumeEffect.setVolume(command["arg"]);
+    } else if (command["theme"] == "none") {
+      theme = NONE;
+    }
+    inputString = "";
+    stringComplete = false;
+  }
 }
