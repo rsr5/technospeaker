@@ -2,11 +2,12 @@
 #include <FastLED.h>
 #include "gfx.h"
 #include "balls.h"
+#include "spectrum.h"
+#include "spectrum_analyzer.h"
 
 #define NONE 0
 #define BALLS 1
-#define BLINKER 2
-#define VOLUME 3
+#define SPECTRUM 2
 
 CRGB leds[NUM_LEDS];
 CRGB current_colour = CRGB::Red;
@@ -20,38 +21,8 @@ bool showColour = false;
 int theme = BALLS;
 int lastTheme = BALLS;
 
-class VolumeEffect {
-  unsigned long previousMillis;
-  int volume;
-
-  public:
-  VolumeEffect() {
-    volume = 0;
-    previousMillis = 0;
-  }
-
-  void setVolume(int newVolume) {
-    volume = newVolume;
-    previousMillis = millis();
-  }
-
-  void doFrame() {
-    unsigned long currentMillis = millis();
-    int num_leds = (int)((float)volume / 100.0 * NUM_LEDS);
-
-    for(int led = 0; led < num_leds; led++) {
-      leds[led] = CRGB::Blue;
-    }
-    for(int led = num_leds; led < NUM_LEDS; led++) {
-      leds[led] = CRGB::Red;
-    }
-    FastLED.show();
-
-    if ((currentMillis - previousMillis) >= 2000) {
-      theme = lastTheme;
-    }
-  }
-};
+BallsEffect ballsEffect;
+SpectrumEffect spectrumEffect;
 
 
 void setup() {
@@ -64,16 +35,17 @@ void setup() {
   inputString.reserve(200);
 
   clearScreen(leds);
+
+  setupSpectrumAnalyzer();
 }
 
-BallsEffect ballsEffect;
-VolumeEffect volumeEffect;
-
 void loop() {
+  processSpectrumAnalyzer();
+
   if (theme == BALLS) {
     ballsEffect.doFrame(leds);
-  } else if (theme == VOLUME) {
-    volumeEffect.doFrame();
+  } else if (theme == SPECTRUM) {
+    spectrumEffect.doFrame(leds);
   } else {
     clearScreen(leds);
   }
@@ -94,12 +66,9 @@ void loop() {
     if (command["theme"] == "balls") {
       lastTheme = theme;
       theme = BALLS;
-    } else if (command["theme"] == "volume") {
-      if (theme != VOLUME) {
-        lastTheme = theme;
-      }
-      theme = VOLUME;
-      volumeEffect.setVolume(command["arg"]);
+    } else if (command["theme"] == "spectrum") {
+      lastTheme = theme;
+      theme = SPECTRUM;
     } else if (command["theme"] == "none") {
       theme = NONE;
     }
