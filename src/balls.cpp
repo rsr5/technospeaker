@@ -42,9 +42,9 @@ BallsEffect::BallsEffect() {
   greenball.vy = -1;
   greenball.color = CRGB::Green;
 
-  purpleball.x = 8;
-  purpleball.y = 8;
-  purpleball.vx = 1;
+  purpleball.x = 6;
+  purpleball.y = 6;
+  purpleball.vx = -1;
   purpleball.vy = 1;
   purpleball.color = CRGB::Purple;
 
