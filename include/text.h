@@ -9,10 +9,15 @@ class TextEffect {
   unsigned long previousMillis;
   int delta;
   int offset;
+  int message_width;
+
+  String message = "";
 
   public:
   TextEffect();
+  int messageWidth();
   void doFrame(CRGB *leds);
+  void setMessage(String message);
 };
 
 #endif

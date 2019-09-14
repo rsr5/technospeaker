@@ -57,9 +57,9 @@ void printchar(int x, int y, byte c) {
     }
 }
 
-void printstr(char *string) {
-  for (int i = 0; i < strlen(string); i++) {
-    printchar(i * 8, 0, string[i]);
+void printstr(String *string) {
+  for (int i = 0; i < string->length(); i++) {
+    printchar(i * 8, 0, string->charAt(i));
   }
 }
 
@@ -69,7 +69,17 @@ TextEffect::TextEffect() {
   delta = 1;
   offset = 0;
 
-  printstr(" !\"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQ");
+  printstr(&message);
+}
+
+int TextEffect::messageWidth() {
+  return message.length() * 8;
+}
+
+void TextEffect::setMessage(String message) {
+  this->message = message;
+  clearbuffer();
+  printstr(&this->message);
 }
 
 void TextEffect::doFrame(CRGB *leds) {
@@ -78,8 +88,8 @@ void TextEffect::doFrame(CRGB *leds) {
     previousMillis = currentMillis;
 
     offset += delta;
-    if (offset >= BUF_WIDTH - 16) {
-      delta = -1;
+    if (offset >= messageWidth() - 16) {
+      offset = 0;
     }
     if (offset < 0) {
       offset = 0;

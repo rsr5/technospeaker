@@ -77,6 +77,7 @@ void loop() {
     } else if (command["theme"] == "text") {
       lastTheme = theme;
       theme = TEXT;
+      textEffect.setMessage(command["message"]);
     } else if (command["theme"] == "none") {
       theme = NONE;
     }
