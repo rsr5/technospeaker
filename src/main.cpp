@@ -3,11 +3,13 @@
 #include "gfx.h"
 #include "balls.h"
 #include "spectrum.h"
+#include "text.h"
 #include "spectrum_analyzer.h"
 
 #define NONE 0
 #define BALLS 1
 #define SPECTRUM 2
+#define TEXT 4
 
 CRGB leds[NUM_LEDS];
 CRGB current_colour = CRGB::Red;
@@ -23,6 +25,7 @@ int lastTheme = BALLS;
 
 BallsEffect ballsEffect;
 SpectrumEffect spectrumEffect;
+TextEffect textEffect;
 
 
 void setup() {
@@ -46,6 +49,8 @@ void loop() {
     ballsEffect.doFrame(leds);
   } else if (theme == SPECTRUM) {
     spectrumEffect.doFrame(leds);
+  } else if (theme == TEXT) {
+    textEffect.doFrame(leds);
   } else {
     clearScreen(leds);
   }
@@ -69,6 +74,9 @@ void loop() {
     } else if (command["theme"] == "spectrum") {
       lastTheme = theme;
       theme = SPECTRUM;
+    } else if (command["theme"] == "text") {
+      lastTheme = theme;
+      theme = TEXT;
     } else if (command["theme"] == "none") {
       theme = NONE;
     }
